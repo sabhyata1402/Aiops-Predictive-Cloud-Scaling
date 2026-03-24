@@ -1,12 +1,36 @@
-import boto3
+import os
 import numpy as np
 import pandas as pd
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import joblib
 import time
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+
+# Optional cloud SDKs — only imported if that provider is selected
+try:
+    import boto3
+    HAS_BOTO3 = True
+except ImportError:
+    HAS_BOTO3 = False
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
+try:
+    from azure.identity import (
+        DefaultAzureCredential,
+        InteractiveBrowserCredential,
+        ClientSecretCredential,
+    )
+    from azure.monitor.query import MetricsQueryClient, MetricAggregationType
+    HAS_AZURE = True
+except ImportError:
+    HAS_AZURE = False
 
 
 class LivePredictorProduction:
@@ -31,9 +55,32 @@ class LivePredictorProduction:
         # Load trained model
         self.model = self._load_model()
         
-        # Initialize cloud clients
+        # Initialize cloud clients based on provider
+        self.cloudwatch      = None
+        self.azure_client    = None
+        self.azure_resource  = None
+
         if cloud_provider == 'aws':
-            self.cloudwatch = boto3.client('cloudwatch', region_name='eu-west-1')
+            if HAS_BOTO3:
+                try:
+                    self.cloudwatch = boto3.client('cloudwatch', region_name='eu-west-1')
+                    print("  ✅ Connected to AWS CloudWatch")
+                except Exception:
+                    print("  ⚠️ AWS credentials not found. Running in MOCK mode.")
+            else:
+                print("  ⚠️ boto3 not installed. Running in MOCK mode.")
+
+        elif cloud_provider == 'azure':
+            self._init_azure_client()
+
+        elif cloud_provider == 'psutil':
+            if HAS_PSUTIL:
+                print("  ✅ psutil ready — reading real local CPU/memory")
+            else:
+                print("  ⚠️ psutil not installed. Run: pip install psutil")
+
+        elif cloud_provider == 'mock':
+            print("  ℹ️  Mock mode — synthetic metrics for testing")
         
         # Tracking
         self.predictions_log = []
@@ -54,23 +101,185 @@ class LivePredictorProduction:
             print("⚠️  Model not found")
             return None
     
-    def get_aws_metrics(self):
-        """STEP 1: Get CURRENT metrics from AWS CloudWatch"""
-        response = self.cloudwatch.get_metric_statistics(
-            Namespace='AWS/EC2',
-            MetricName='CPUUtilization',
-            StartTime=datetime.utcnow() - timedelta(minutes=1),
-            EndTime=datetime.utcnow(),
-            Period=60,
-            Statistics=['Average']
+    # ─────────────────────────────────────────────────────────────────
+    # AZURE MONITOR
+    # ─────────────────────────────────────────────────────────────────
+
+    def _init_azure_client(self):
+        """
+        Connect to Azure Monitor using credentials from environment variables.
+
+        Authentication options (in priority order):
+          1. Azure CLI  →  run `az login` in terminal — no env vars needed
+          2. Service Principal → set AZURE_TENANT_ID, AZURE_CLIENT_ID,
+                                 AZURE_CLIENT_SECRET in environment
+          3. Managed Identity → works automatically when running on Azure VM
+
+        Required env vars for resource targeting:
+          AZURE_SUBSCRIPTION_ID  — your Azure subscription ID
+          AZURE_RESOURCE_GROUP   — resource group name (e.g. "rg-h9mlai")
+          AZURE_VM_NAME          — VM name to monitor (e.g. "vm-h9mlai")
+        """
+        if not HAS_AZURE:
+            print("  ⚠️ Azure SDK not installed.")
+            print("     Run: pip install azure-identity azure-monitor-query")
+            return
+
+        # Build resource URI from environment variables
+        subscription_id = os.getenv('AZURE_SUBSCRIPTION_ID', '')
+        resource_group  = os.getenv('AZURE_RESOURCE_GROUP', '')
+        vm_name         = os.getenv('AZURE_VM_NAME', '')
+
+        if not all([subscription_id, resource_group, vm_name]):
+            print("  ⚠️ Missing Azure env vars. Need:")
+            print("     AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, AZURE_VM_NAME")
+            print("     Falling back to MOCK mode.")
+            return
+
+        self.azure_resource = (
+            f"/subscriptions/{subscription_id}"
+            f"/resourceGroups/{resource_group}"
+            f"/providers/Microsoft.Compute/virtualMachines/{vm_name}"
         )
-        
-        if response['Datapoints']:
-            cpu = response['Datapoints'][-1]['Average']
+
+        # Try credentials in order:
+        # 1. Service principal env vars (AZURE_CLIENT_ID/SECRET/TENANT_ID)
+        # 2. Azure CLI (if installed)
+        # 3. Interactive browser popup (no CLI needed — opens browser)
+        credential = self._get_azure_credential()
+        if credential is None:
+            return
+        try:
+            self.azure_client = MetricsQueryClient(credential)
+            print(f"  ✅ Connected to Azure Monitor")
+            print(f"     Subscription : {subscription_id}")
+            print(f"     Resource     : {resource_group}/{vm_name}")
+        except Exception as e:
+            print(f"  ⚠️ Azure Monitor client failed: {e}")
+
+    def _get_azure_credential(self):
+        """
+        Return the best available Azure credential.
+        Priority:
+          1. Service Principal (env vars) — no user interaction
+          2. DefaultAzureCredential    — picks up Azure CLI if installed
+          3. InteractiveBrowserCredential — opens browser, no CLI needed
+        """
+        tenant_id     = os.getenv('AZURE_TENANT_ID', '')
+        client_id     = os.getenv('AZURE_CLIENT_ID', '')
+        client_secret = os.getenv('AZURE_CLIENT_SECRET', '')
+
+        # Option 1: Service principal (fully automated, no browser)
+        if all([tenant_id, client_id, client_secret]):
+            print("  ℹ️  Using service principal credentials")
+            return ClientSecretCredential(tenant_id, client_id, client_secret)
+
+        # Option 2: DefaultAzureCredential (works if Azure CLI is installed)
+        try:
+            cred = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+            # Test it works by getting a token
+            cred.get_token("https://management.azure.com/.default")
+            print("  ℹ️  Using Azure CLI / environment credentials")
+            return cred
+        except Exception:
+            pass
+
+        # Option 3: Browser popup — no CLI needed, just a browser
+        print("  ℹ️  Opening browser for Azure login...")
+        print("     Sign in with your NCI student Azure account in the browser.")
+        try:
+            return InteractiveBrowserCredential()
+        except Exception as e:
+            print(f"  ⚠️ Browser auth failed: {e}")
+            return None
+
+    def _get_azure_metrics(self):
+        """
+        Query Azure Monitor for the VM's CPU and memory usage
+        over the last 5 minutes and return the latest data point.
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            response = self.azure_client.query_resource(
+                self.azure_resource,
+                metric_names=["Percentage CPU"],
+                timespan=(now - timedelta(minutes=5), now),
+                granularity=timedelta(minutes=1),
+                aggregations=[MetricAggregationType.AVERAGE],
+            )
+
+            cpu = 50.0  # fallback default
+            for metric in response.metrics:
+                for ts in metric.timeseries:
+                    # Get the latest non-None data point
+                    for dp in reversed(ts.data):
+                        if dp.average is not None:
+                            cpu = dp.average
+                            break
+
+            # Azure Monitor does not expose memory % directly for VMs
+            # (requires Azure Monitor Agent + custom metric).
+            # We estimate it from the CPU reading as a proxy.
+            mem = cpu * 0.75 + np.random.normal(0, 2)
+            mem = float(np.clip(mem, 0, 100))
+
+            print(f"   [Azure Monitor] CPU: {cpu:.1f}%  Memory (estimated): {mem:.1f}%")
+            return np.array([[cpu, mem, 45.0, 100.0, 0, 0, 0, 0, 0, 0]])
+
+        except Exception as e:
+            print(f"   ⚠️ Azure Monitor query failed: {e}")
+            print("   Falling back to mock data.")
+            return self._get_mock_metrics()
+
+    # ─────────────────────────────────────────────────────────────────
+    # METRICS ROUTER
+    # ─────────────────────────────────────────────────────────────────
+
+    def get_metrics(self):
+        """STEP 1: Get CURRENT metrics — routes to correct provider."""
+        if self.cloud_provider == 'azure' and self.azure_client is not None:
+            return self._get_azure_metrics()
+        elif self.cloud_provider == 'psutil':
+            return self._get_psutil_metrics()
+        elif self.cloud_provider == 'aws' and self.cloudwatch is not None:
+            return self._get_aws_metrics()
         else:
+            return self._get_mock_metrics()
+
+    def _get_psutil_metrics(self):
+        """Read real CPU and memory from local machine using psutil."""
+        cpu = psutil.cpu_percent(interval=1)
+        mem = psutil.virtual_memory().percent
+        print(f"   [psutil] Real CPU: {cpu:.1f}%  Memory: {mem:.1f}%")
+        return np.array([[cpu, mem, 45.0, 100.0, 0, 0, 0, 0, 0, 0]])
+
+    def _get_mock_metrics(self):
+        """Synthetic metrics — useful for testing without any cloud account."""
+        cpu = np.random.uniform(40, 85)
+        mem = np.random.uniform(30, 70)
+        print(f"   [Mock] Synthetic CPU: {cpu:.1f}%  Memory: {mem:.1f}%")
+        return np.array([[cpu, mem, 45.0, 100.0, 0, 0, 0, 0, 0, 0]])
+
+    def _get_aws_metrics(self):
+        """Get CURRENT metrics from AWS CloudWatch."""
+        try:
+            response = self.cloudwatch.get_metric_statistics(
+                Namespace='AWS/EC2',
+                MetricName='CPUUtilization',
+                StartTime=datetime.utcnow() - timedelta(minutes=1),
+                EndTime=datetime.utcnow(),
+                Period=60,
+                Statistics=['Average']
+            )
+            cpu = response['Datapoints'][-1]['Average'] if response['Datapoints'] else 50.0
+        except Exception:
+            print("   ⚠️ AWS Error, falling back to mock data")
             cpu = 50.0
-        
         return np.array([[cpu, 60.0, 45.0, 100.0, 0, 0, 0, 0, 0, 0]])
+
+    # Keep old name as alias so existing code doesn't break
+    def get_aws_metrics(self):
+        return self.get_metrics()
     
     def make_prediction(self, current_metrics, timestamp=None):
         """STEP 2: Make 15-minute prediction RIGHT NOW"""
@@ -117,8 +326,8 @@ class LivePredictorProduction:
         print(f"   Finished at: {datetime.now().strftime('%H:%M:%S')}")
         
         # STEP 4: Get actual metrics
-        print(f"\n📊 Fetching ACTUAL metrics from AWS...")
-        actual_metrics = self.get_aws_metrics()
+        print(f"\n📊 Fetching ACTUAL metrics ({self.cloud_provider})...")
+        actual_metrics = self.get_metrics()
         actual_cpu = actual_metrics[0][0]
         print(f"   Actual CPU: {actual_cpu:.2f}%")
         
@@ -170,23 +379,57 @@ class LivePredictorProduction:
         
         return self.validation_results
     
-    def publish_to_cloudwatch(self, metric_name, value):
-        """STEP 7: Publish results to AWS CloudWatch"""
+    def publish_results(self, metric_name, value):
+        """STEP 7: Publish prediction results — routes to correct provider."""
+        if self.cloud_provider == 'azure':
+            self._publish_to_azure_log(metric_name, value)
+        elif self.cloud_provider == 'aws' and self.cloudwatch is not None:
+            self._publish_to_cloudwatch(metric_name, value)
+        else:
+            print(f"  [Local] {metric_name}: {value:.2f} (saved to JSON export)")
+
+    def _publish_to_cloudwatch(self, metric_name, value):
+        """Publish to AWS CloudWatch custom namespace."""
         try:
             self.cloudwatch.put_metric_data(
                 Namespace='AIOps-Predictions',
-                MetricData=[
-                    {
-                        'MetricName': metric_name,
-                        'Timestamp': datetime.utcnow(),
-                        'Value': float(value),
-                        'Unit': 'Count'
-                    },
-                ]
+                MetricData=[{
+                    'MetricName': metric_name,
+                    'Timestamp': datetime.utcnow(),
+                    'Value': float(value),
+                    'Unit': 'Count'
+                }]
             )
-            print(f"✅ Published {metric_name}: {value}")
+            print(f"  ✅ Published to CloudWatch — {metric_name}: {value:.2f}")
         except Exception as e:
-            print(f"⚠️  Could not publish to CloudWatch: {e}")
+            print(f"  ⚠️ CloudWatch publish failed: {e}")
+
+    def _publish_to_azure_log(self, metric_name, value):
+        """
+        Write prediction result to a local JSON log file.
+        In production this would use the Azure Monitor Ingestion API
+        (azure-monitor-ingestion package + Data Collection Rule).
+        For the student project, local JSON export is sufficient.
+        """
+        log_path = self.results_dir / "azure_prediction_log.json"
+        entry = {
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'metric': metric_name,
+            'value': round(float(value), 4),
+            'provider': 'azure',
+        }
+        logs = []
+        if log_path.exists():
+            with open(log_path) as f:
+                logs = json.load(f)
+        logs.append(entry)
+        with open(log_path, 'w') as f:
+            json.dump(logs, f, indent=2)
+        print(f"  ✅ Logged to {log_path} — {metric_name}: {value:.2f}")
+
+    # Keep old name as alias so existing code doesn't break
+    def publish_to_cloudwatch(self, metric_name, value):
+        return self.publish_results(metric_name, value)
     
     def export_results(self):
         """STEP 8: Export all results to JSON"""
@@ -263,10 +506,15 @@ def complete_production_workflow():
     print("="*70)
     
     # STEP 1-2: Initialize and make prediction
+    # cloud_provider options:
+    #   'azure'  → reads from Azure Monitor (needs az login + env vars)
+    #   'psutil' → reads real CPU/memory from THIS machine (no account needed)
+    #   'mock'   → synthetic data for testing (no account needed)
+    #   'aws'    → reads from AWS CloudWatch (needs boto3 + credentials)
     print("\n[STEP 1-2] Initializing and making prediction...")
-    predictor = LivePredictorProduction(model_type='xgboost', cloud_provider='aws')
-    
-    current_metrics = predictor.get_aws_metrics()
+    predictor = LivePredictorProduction(model_type='xgboost', cloud_provider='azure')
+
+    current_metrics = predictor.get_metrics()
     prediction = predictor.make_prediction(current_metrics)
     
     # STEP 3-4: Wait 15 minutes and get actual metrics

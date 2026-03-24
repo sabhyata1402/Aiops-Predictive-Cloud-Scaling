@@ -4,35 +4,35 @@
       "rmse": 11.757699966430664,
       "mae": 9.820599555969238,
       "mape": 11.2329,
-      "train_time_s": 1.2,
-      "latency_ms": 9.1
+      "train_time_s": 0.9,
+      "latency_ms": 7.3
     },
     "random_forest": {
-      "rmse": 14.2298,
-      "mae": 12.4248,
-      "mape": 13.2838,
-      "train_time_s": 62.0,
-      "latency_ms": 125.5
+      "rmse": 13.1231,
+      "mae": 11.4893,
+      "mape": 12.3284,
+      "train_time_s": 16.6,
+      "latency_ms": 43.9
     },
     "lstm": {
       "rmse": 10.6359,
       "mae": 9.406,
       "mape": 10.1925,
-      "train_time_s": 115.0,
-      "latency_ms": 3.3
+      "train_time_s": 112.6,
+      "latency_ms": 2.4
     }
   },
   "cross_cloud": {
     "azure": {
       "xgboost_rmse": 11.523200035095215,
-      "rf_rmse": 10.2921,
+      "rf_rmse": 9.7514,
       "lstm_rmse": 14.0115,
       "n_samples": 28900,
       "common_features": 51
     },
     "google": {
       "xgboost_rmse": 33.836299896240234,
-      "rf_rmse": 25.0573,
+      "rf_rmse": 23.371,
       "lstm_rmse": 18.3852,
       "n_samples": 21640,
       "common_features": 51

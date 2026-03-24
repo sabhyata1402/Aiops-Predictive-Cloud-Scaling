@@ -1,0 +1,18 @@
+{
+  "model": "xgboost",
+  "cloud_provider": "azure",
+  "timestamp": "2026-03-24T22:52:08.422227",
+  "total_predictions": 1,
+  "total_validated": 1,
+  "metrics": {
+    "mean_absolute_error": 11.37,
+    "mean_absolute_percentage_error": 19.47
+  },
+  "latest_results": [
+    {
+      "predicted": 69.78,
+      "actual": 58.41,
+      "error": 11.37
+    }
+  ]
+}

@@ -9,17 +9,23 @@ __pycache__/
 *$py.class
 *.so
 
-# Data and Models
-# (Ignoring raw/processed to avoid exceeding GitHub's file 100MB limit)
+# Raw data — large files, do NOT push
 data/raw/
-data/processed/
-data/models/
-*.parquet
-*.csv
-*.tar.gz
-*.h5
-*.pt
-*.pth
+
+# Keep processed data, models, results, figures (needed for Streamlit Cloud)
+# data/processed/ → parquet files needed by dashboard
+# data/models/    → trained model pkl/pt files
+# data/results/   → evaluation JSON/pkl
+# data/figures/   → report plots
+
+# Exclude only the huge RF model until retrained (646MB > GitHub 100MB limit)
+# After running: python src/models/train_all.py  → rf_model.pkl will be ~40MB
+# Then remove this line:
+# data/models/rf_model.pkl
+
+# Installer packages
+*.pkg
+*.dmg
 
 # OS generated files
 .DS_Store

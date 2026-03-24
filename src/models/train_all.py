@@ -154,10 +154,10 @@ def train_random_forest(X_train, y_train, X_val, y_val):
 
     t0 = time.time()
     model = RandomForestRegressor(
-        n_estimators=200,
-        max_depth=20,
-        min_samples_split=5,
-        min_samples_leaf=2,
+        n_estimators=100,   # reduced from 200 to keep model file < 50MB
+        max_depth=15,       # reduced from 20
+        min_samples_split=10,
+        min_samples_leaf=4,
         max_features='sqrt',
         random_state=SEED,
         n_jobs=-1
@@ -360,7 +360,7 @@ def compute_learning_curves(X_train, y_train, X_test, y_test,
             round(np.sqrt(mean_squared_error(y_test, m_xgb.predict(X_test))), 4))
 
         # Random Forest
-        m_rf = RandomForestRegressor(n_estimators=100, max_depth=15,
+        m_rf = RandomForestRegressor(n_estimators=50, max_depth=12,
                                       random_state=SEED, n_jobs=-1)
         m_rf.fit(X_sub, y_sub)
         curves['rf'].append(

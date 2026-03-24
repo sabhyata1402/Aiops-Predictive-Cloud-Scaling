@@ -1,0 +1,26 @@
+[
+  {
+    "timestamp": "2026-03-24T22:46:19.564914+00:00",
+    "metric": "PredictionError",
+    "value": 32.79,
+    "provider": "azure"
+  },
+  {
+    "timestamp": "2026-03-24T22:46:19.584093+00:00",
+    "metric": "PredictionAccuracy",
+    "value": 19.53,
+    "provider": "azure"
+  },
+  {
+    "timestamp": "2026-03-24T22:52:08.261425+00:00",
+    "metric": "PredictionError",
+    "value": 11.37,
+    "provider": "azure"
+  },
+  {
+    "timestamp": "2026-03-24T22:52:08.281530+00:00",
+    "metric": "PredictionAccuracy",
+    "value": 80.53,
+    "provider": "azure"
+  }
+]
