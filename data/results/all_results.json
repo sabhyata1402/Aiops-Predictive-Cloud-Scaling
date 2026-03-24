@@ -1,0 +1,65 @@
+{
+  "model_performance": {
+    "xgboost": {
+      "rmse": 11.757699966430664,
+      "mae": 9.820599555969238,
+      "mape": 11.2329,
+      "train_time_s": 1.2,
+      "latency_ms": 9.1
+    },
+    "random_forest": {
+      "rmse": 14.2298,
+      "mae": 12.4248,
+      "mape": 13.2838,
+      "train_time_s": 62.0,
+      "latency_ms": 125.5
+    },
+    "lstm": {
+      "rmse": 10.6359,
+      "mae": 9.406,
+      "mape": 10.1925,
+      "train_time_s": 115.0,
+      "latency_ms": 3.3
+    }
+  },
+  "cross_cloud": {
+    "azure": {
+      "xgboost_rmse": 11.523200035095215,
+      "rf_rmse": 10.2921,
+      "lstm_rmse": 14.0115,
+      "n_samples": 28900,
+      "common_features": 51
+    },
+    "google": {
+      "xgboost_rmse": 33.836299896240234,
+      "rf_rmse": 25.0573,
+      "lstm_rmse": 18.3852,
+      "n_samples": 21640,
+      "common_features": 51
+    }
+  },
+  "cost_analysis": {
+    "xgboost": {
+      "model": "xgboost",
+      "mean_daily_saving_eur": 2.91,
+      "ci_lower": -4.61,
+      "ci_upper": 5.53,
+      "pct_windows_proactive_cheaper": 68.9
+    },
+    "random_forest": {
+      "model": "random_forest",
+      "mean_daily_saving_eur": 3.81,
+      "ci_lower": 0.0,
+      "ci_upper": 5.53,
+      "pct_windows_proactive_cheaper": 68.9
+    },
+    "lstm": {
+      "model": "lstm",
+      "mean_daily_saving_eur": 3.81,
+      "ci_lower": 0.0,
+      "ci_upper": 5.53,
+      "pct_windows_proactive_cheaper": 68.9
+    }
+  },
+  "n_features": 51
+}
