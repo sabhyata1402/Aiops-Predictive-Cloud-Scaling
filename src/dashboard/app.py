@@ -190,104 +190,111 @@ def main():
         st.subheader("🖥️ Live Cloud Resource Monitor")
         st.markdown(
             "Real-time CPU & memory monitoring of the **Streamlit Cloud server** "
-            "with 30-minute-ahead XGBoost prediction. Auto-refreshes every 10 seconds."
+            "with XGBoost prediction. Updates in background — no page blink."
         )
 
-        # Auto-refresh using meta tag
-        refresh_interval = st.selectbox(
-            "Auto-refresh interval", [10, 30, 60], index=0,
-            format_func=lambda x: f"{x} seconds"
-        )
-        st.markdown(
-            f'<meta http-equiv="refresh" content="{refresh_interval}">',
-            unsafe_allow_html=True
-        )
+        col_ctrl1, col_ctrl2 = st.columns([1, 4])
+        with col_ctrl1:
+            refresh_interval = st.selectbox(
+                "Refresh every", [5, 10, 30, 60], index=1,
+                format_func=lambda x: f"{x}s"
+            )
 
-        cpu, mem, disk, ts = get_live_metrics()
+        @st.fragment(run_every=refresh_interval)
+        def live_panel(xgb_model):
+            cpu, mem, disk, ts = get_live_metrics()
 
-        # Predict next CPU
-        predicted_cpu = cpu * 1.02  # fallback
-        if models.get('xgboost'):
-            predicted_cpu = live_predict(models['xgboost'], cpu, mem)
+            predicted_cpu = live_predict(xgb_model, cpu, mem) \
+                if xgb_model else cpu * 1.02
 
-        # Alert
-        if predicted_cpu > 85:
-            st.error(f"🔴 CRITICAL: Predicted CPU {predicted_cpu:.1f}% — scale up immediately!")
-        elif predicted_cpu > 70:
-            st.warning(f"🟡 WARNING: Predicted CPU {predicted_cpu:.1f}% — monitor closely.")
-        else:
-            st.success(f"🟢 NORMAL: Predicted CPU {predicted_cpu:.1f}% — system healthy.")
+            # Alert banner
+            if predicted_cpu > 85:
+                st.error(f"🔴 CRITICAL — Predicted CPU {predicted_cpu:.1f}% · Scale up NOW")
+            elif predicted_cpu > 70:
+                st.warning(f"🟡 WARNING — Predicted CPU {predicted_cpu:.1f}% · Monitor closely")
+            else:
+                st.success(f"🟢 NORMAL — Predicted CPU {predicted_cpu:.1f}% · System healthy")
 
-        # Live KPI cards
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.metric("CPU Usage (Now)", f"{cpu:.1f}%",
-                      delta=f"{cpu - 50:.1f}% vs baseline")
-        with c2:
-            st.metric("Memory Usage", f"{mem:.1f}%")
-        with c3:
-            st.metric("Disk Usage", f"{disk:.1f}%")
-        with c4:
-            st.metric("XGBoost Prediction", f"{predicted_cpu:.1f}%",
-                      delta=f"{predicted_cpu - cpu:+.1f}% trend",
-                      delta_color="inverse")
+            # KPI tiles
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.metric("CPU Now", f"{cpu:.1f}%",
+                          delta=f"{cpu - 50:+.1f}% vs baseline")
+            with c2:
+                st.metric("Memory", f"{mem:.1f}%")
+            with c3:
+                st.metric("Disk", f"{disk:.1f}%")
+            with c4:
+                st.metric("XGBoost Forecast", f"{predicted_cpu:.1f}%",
+                          delta=f"{predicted_cpu - cpu:+.1f}% trend",
+                          delta_color="inverse")
 
-        st.caption(f"Last updated: {ts}  |  Cloud server: Streamlit Community Cloud (Linux x86_64)")
+            st.caption(
+                f"⏱ {ts} · Streamlit Community Cloud (Linux x86_64) · "
+                f"refreshing every {refresh_interval}s"
+            )
 
-        # Rolling history using session state
-        if 'live_history' not in st.session_state:
-            st.session_state.live_history = []
+            # Accumulate rolling history in session state
+            if 'live_history' not in st.session_state:
+                st.session_state.live_history = []
+            st.session_state.live_history.append(
+                {'time': ts, 'cpu': cpu, 'mem': mem, 'predicted': predicted_cpu}
+            )
+            st.session_state.live_history = st.session_state.live_history[-60:]
 
-        st.session_state.live_history.append({
-            'time': ts, 'cpu': cpu, 'mem': mem,
-            'predicted': predicted_cpu
-        })
-        # Keep last 30 readings
-        st.session_state.live_history = st.session_state.live_history[-30:]
+            hist_df = pd.DataFrame(st.session_state.live_history)
 
-        hist_df = pd.DataFrame(st.session_state.live_history)
-
-        if len(hist_df) > 1:
+            # Live chart — updates in place like Grafana
             fig_live = go.Figure()
-            fig_live.add_trace(go.Scatter(
-                x=hist_df['time'], y=hist_df['cpu'],
-                mode='lines+markers', name='Actual CPU%',
-                line=dict(color='black', width=2)
-            ))
-            fig_live.add_trace(go.Scatter(
-                x=hist_df['time'], y=hist_df['predicted'],
-                mode='lines+markers', name='XGBoost Predicted',
-                line=dict(color='#e53935', width=2, dash='dot')
-            ))
-            fig_live.add_trace(go.Scatter(
-                x=hist_df['time'], y=hist_df['mem'],
-                mode='lines+markers', name='Memory%',
-                line=dict(color='#1e88e5', width=1.5)
-            ))
-            fig_live.add_hline(y=85, line_dash='dash', line_color='grey',
-                               annotation_text='SLA threshold (85%)')
+            if len(hist_df) > 1:
+                fig_live.add_trace(go.Scatter(
+                    x=hist_df['time'], y=hist_df['cpu'],
+                    mode='lines+markers', name='Actual CPU%',
+                    line=dict(color='#212121', width=2),
+                    fill='tozeroy', fillcolor='rgba(33,33,33,0.07)'
+                ))
+                fig_live.add_trace(go.Scatter(
+                    x=hist_df['time'], y=hist_df['predicted'],
+                    mode='lines+markers', name='XGBoost Predicted',
+                    line=dict(color='#e53935', width=2, dash='dot')
+                ))
+                fig_live.add_trace(go.Scatter(
+                    x=hist_df['time'], y=hist_df['mem'],
+                    mode='lines', name='Memory%',
+                    line=dict(color='#1e88e5', width=1.5)
+                ))
+            fig_live.add_hline(
+                y=85, line_dash='dash', line_color='#ff6f00',
+                annotation_text='SLA threshold 85%',
+                annotation_position='top right'
+            )
             fig_live.update_layout(
-                height=380, title="Live Resource Usage — Streamlit Cloud Server",
+                height=400,
+                title=dict(text="Live Resource Usage — Streamlit Cloud Server",
+                           font=dict(size=14)),
                 xaxis_title="Time (UTC)", yaxis_title="Utilisation (%)",
                 yaxis=dict(range=[0, 105]),
-                plot_bgcolor='white', paper_bgcolor='white',
+                plot_bgcolor='#fafafa', paper_bgcolor='white',
                 legend=dict(orientation='h', yanchor='bottom', y=1.02),
-                margin=dict(t=50, l=50, r=20, b=40)
+                margin=dict(t=50, l=50, r=20, b=40),
+                uirevision='live'   # keeps zoom/pan stable between updates
             )
             st.plotly_chart(fig_live, use_container_width=True)
-        else:
-            st.info("Collecting data... refresh the page to see the live chart build up.")
 
-        # Scaling recommendation
-        saving_live, p_nodes_live, r_nodes_live = cost_saving(
-            predicted_cpu, cpu, 3)
-        st.markdown(f"""
-        **Scaling Recommendation:**
-        - Current nodes: **3**
-        - Recommended (proactive): **{p_nodes_live} nodes**
-        - Reactive baseline: **{r_nodes_live} nodes**
-        - Est. daily saving: **€{saving_live:.2f}**
-        """)
+            # Scaling recommendation
+            saving_live, p_nodes_live, r_nodes_live = cost_saving(
+                predicted_cpu, cpu, 3)
+            st.markdown(f"""
+            **Scaling Recommendation**
+            | Node count | Value |
+            |---|---|
+            | Current | 3 |
+            | Recommended (proactive) | **{p_nodes_live}** |
+            | Reactive baseline | {r_nodes_live} |
+            | Est. daily saving | **€{saving_live:.2f}** |
+            """)
+
+        live_panel(models.get('xgboost'))
 
     # ══════════════════════════════════════════════════════════════════════════
     # TAB 1 — FORECAST DASHBOARD (existing content moved here)
