@@ -29,13 +29,18 @@ st.markdown("""
 <style>
     /* Global */
     [data-testid="stAppViewContainer"] { background: #f5f7fa; }
-    [data-testid="stSidebar"]          { background: #1a237e; }
-    [data-testid="stSidebar"] * { color: #e8eaf6 !important; }
-    [data-testid="stSidebar"] .stButton button {
-        background: #e53935 !important; color: white !important;
-        border: none; font-weight: 700;
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f172a 0%, #111827 35%, #0b1224 100%);
+        padding-top: 0.6rem;
     }
-    [data-testid="stSidebar"] hr { border-color: #3949ab; }
+    [data-testid="stSidebar"] * { color: #e5e7eb !important; }
+    [data-testid="stSidebar"] .stButton button {
+        background: linear-gradient(135deg,#2563eb,#1d4ed8) !important;
+        color: white !important;
+        border: none; font-weight: 700;
+        box-shadow: 0 6px 16px rgba(37,99,235,0.35);
+    }
+    [data-testid="stSidebar"] hr { border-color: #1f2937; }
 
     /* Header banner */
     .aiops-header {
@@ -176,13 +181,20 @@ def predict_lstm_model(model, X, seq_len=6, n_features=None):
 
 
 def cost_saving(predicted_cpu, actual_cpu,
+                forecast_30m=None, target_util=75,
                 current_nodes=3, price=0.192):
-    if predicted_cpu > 70:
-        proactive_nodes = max(current_nodes,
-                              round(current_nodes * predicted_cpu / 80))
-    else:
-        proactive_nodes = current_nodes
-    reactive_nodes = current_nodes * 1.4 if actual_cpu > 85 else current_nodes
+    """Estimate proactive vs reactive node counts and daily saving.
+
+    projected is the worst of actual, short-horizon pred, and 30m forecast.
+    target_util keeps utilisation below this % when recommending nodes.
+    """
+    projected = max(actual_cpu, predicted_cpu,
+                    forecast_30m if forecast_30m is not None else predicted_cpu)
+    safe_util = max(target_util, 1)
+    proactive_nodes = max(current_nodes,
+                          int(np.ceil(current_nodes * projected / safe_util)))
+    reactive_nodes = max(current_nodes,
+                         int(np.ceil(current_nodes * actual_cpu / 85)))
     saving = (reactive_nodes - proactive_nodes) * 24 * price
     return round(saving, 2), int(proactive_nodes), int(reactive_nodes)
 
@@ -253,7 +265,7 @@ def main():
 </div>
 """, unsafe_allow_html=True)
 
-        col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1, 1, 3])
+        col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1, 1, 2])
         with col_ctrl1:
             refresh_interval = st.selectbox(
                 "Refresh every", [5, 10, 30, 60], index=1,
@@ -264,6 +276,12 @@ def main():
                 "🔥 Load Test Simulation", value=False,
                 help="Runs a k6-style ramp-up → peak → ramp-down load pattern "
                      "(src/monitoring/load_test.js) to demo alerts and auto-scaling"
+            )
+        with col_ctrl3:
+            current_nodes_live = st.slider("Current node count", 1, 40, 3, 1)
+            target_util_live = st.slider(
+                "Target utilisation ceiling", 60, 90, 75, 1,
+                help="We recommend keeping CPU/Memory below this % via scale-out"
             )
 
         if simulate and 'sim_step' not in st.session_state:
@@ -322,39 +340,51 @@ def main():
             else:
                 predicted_cpu = round(cpu * 1.04, 1)
 
-            # ── Alert — check BOTH cpu and memory ────────────────────────────
-            cpu_breach = predicted_cpu > 85 or cpu > 85
-            mem_breach = mem > 85
-            cpu_warn   = predicted_cpu > 70 or cpu > 70
-            mem_warn   = mem > 75
+            # ── Forward-look forecasts (short + 30m) with simple trend drift
+            trend = max(predicted_cpu - cpu, 0)
+            forecast_10s  = round(predicted_cpu, 1)
+            forecast_30m  = round(min(100, predicted_cpu + trend * 2.5), 1)
+            mem_forecast_30m = round(min(100, mem + max(mem - 60, 0) * 0.5), 1)
 
-            if cpu_breach or mem_breach:
+            # ── Alert — check BOTH cpu and memory with forward look ─────────
+            cpu_breach_now   = predicted_cpu > 85 or cpu > 85
+            mem_breach_now   = mem > 85
+            cpu_breach_30m   = forecast_30m > 85
+            mem_breach_30m   = mem_forecast_30m > 85
+            cpu_warn   = predicted_cpu > 70 or cpu > 70 or forecast_30m > 75
+            mem_warn   = mem > 75 or mem_forecast_30m > 75
+
+            if cpu_breach_now or mem_breach_now or cpu_breach_30m or mem_breach_30m:
                 reasons = []
-                if cpu_breach:
-                    reasons.append(f"CPU {cpu:.1f}% (predicted {predicted_cpu:.1f}%)")
-                if mem_breach:
+                if cpu_breach_now:
+                    reasons.append(f"CPU {cpu:.1f}% (pred {predicted_cpu:.1f}%)")
+                if cpu_breach_30m:
+                    reasons.append(f"CPU forecast 30m {forecast_30m:.1f}%")
+                if mem_breach_now:
                     reasons.append(f"Memory {mem:.1f}%")
+                if mem_breach_30m:
+                    reasons.append(f"Memory forecast 30m {mem_forecast_30m:.1f}%")
                 st.markdown(
-                    f'<div class="alert-red">🔴 <strong>CRITICAL — SLA BREACH RISK</strong> · '
-                    f'{" · ".join(reasons)} · Scale up immediately</div>',
+                    f'<div class="alert-red">🔴 <strong>CRITICAL — SLA BREACH PREDICTED</strong> · '
+                    f" · ".join(reasons) + ' · Scale up immediately (window < 30m)</div>',
                     unsafe_allow_html=True
                 )
             elif cpu_warn or mem_warn:
                 reasons = []
                 if cpu_warn:
-                    reasons.append(f"CPU forecast {predicted_cpu:.1f}%")
+                    reasons.append(f"CPU trend {forecast_30m:.1f}% in 30m")
                 if mem_warn:
-                    reasons.append(f"Memory {mem:.1f}%")
+                    reasons.append(f"Memory trend {mem_forecast_30m:.1f}% in 30m")
                 st.markdown(
                     f'<div class="alert-amber">🟡 <strong>WARNING — Approaching threshold</strong> · '
-                    f'{" · ".join(reasons)} · Consider proactive scale-out</div>',
+                    f" · ".join(reasons) + ' · Consider proactive scale-out</div>',
                     unsafe_allow_html=True
                 )
             else:
                 st.markdown(
                     f'<div class="alert-green">🟢 <strong>NORMAL — All metrics within SLA</strong> · '
                     f'CPU {cpu:.1f}% · Memory {mem:.1f}% · '
-                    f'XGBoost forecast {predicted_cpu:.1f}%</div>',
+                    f'No breach projected in next 30m (CPU {forecast_30m:.1f}%, Mem {mem_forecast_30m:.1f}%)</div>',
                     unsafe_allow_html=True
                 )
 
@@ -454,9 +484,10 @@ def main():
 
             # ── Scaling recommendation ────────────────────────────────────────
             saving_live, p_nodes_live, r_nodes_live = cost_saving(
-                predicted_cpu, cpu, 3)
+                predicted_cpu, cpu, forecast_30m, target_util_live,
+                current_nodes_live)
 
-            if cpu_breach or mem_breach:
+            if cpu_breach_now or mem_breach_now or cpu_breach_30m or mem_breach_30m:
                 rc, ri = "#ffebee", "🚨"
             elif cpu_warn or mem_warn:
                 rc, ri = "#fff8e1", "⚠️"
@@ -465,7 +496,7 @@ def main():
 
             scale_action = (
                 f"Scale-out to **{p_nodes_live} nodes** recommended immediately"
-                if cpu_breach or mem_breach else
+                if cpu_breach_now or mem_breach_now or cpu_breach_30m or mem_breach_30m else
                 f"Scale-out to **{p_nodes_live} nodes** within 15 min"
                 if cpu_warn or mem_warn else
                 f"**{p_nodes_live} nodes** — current capacity adequate"
@@ -475,9 +506,12 @@ def main():
 <div class="rec-card" style="background:{rc}">
 <strong>{ri} Scaling Recommendation</strong> — {scale_action}
 <table style="margin-top:0.6rem">
-  <tr><td>Current nodes</td><td><strong>3</strong></td></tr>
+    <tr><td>Current nodes</td><td><strong>{current_nodes_live}</strong></td></tr>
   <tr><td>Recommended (proactive)</td><td><strong>{p_nodes_live}</strong></td></tr>
   <tr><td>Reactive baseline (without AIOps)</td><td>{r_nodes_live}</td></tr>
+    <tr><td>Target utilisation ceiling</td><td>{target_util_live}%</td></tr>
+    <tr><td>CPU forecast (30m)</td><td>{forecast_30m:.1f}%</td></tr>
+    <tr><td>Memory forecast (30m)</td><td>{mem_forecast_30m:.1f}%</td></tr>
   <tr><td>Estimated daily saving</td><td><strong>€{saving_live:.2f}</strong>
       &nbsp;<small style="color:#666">vs reactive scaling</small></td></tr>
 </table>
@@ -510,6 +544,10 @@ def main():
             n_samples = st.slider("Windows to analyse", 100, 2000, 500, 100)
             target    = st.selectbox("Target metric", ["CPU %", "Memory %"])
             current_nodes = st.slider("Current node count", 1, 20, 3)
+            target_util_forecast = st.slider(
+                "Target utilisation ceiling", 60, 90, 75, 1,
+                help="Keep headroom below this utilisation when sizing nodes"
+            )
 
             st.divider()
             run_btn = st.button("🚀 Run Forecast", type="primary",
@@ -561,8 +599,9 @@ def main():
                 # Cost analysis
                 mean_pred   = float(np.mean(primary_preds))
                 mean_actual = float(np.mean(y))
-                saving, p_nodes, r_nodes = cost_saving(mean_pred, mean_actual,
-                                                        current_nodes)
+                saving, p_nodes, r_nodes = cost_saving(
+                    mean_pred, mean_actual, mean_pred,
+                    target_util_forecast, current_nodes)
 
             # KPI row
             cols = st.columns(5)
@@ -688,7 +727,9 @@ def main():
                     p = model_preds[:len(y)]
                     window_savings = []
                     for pred_v, actual_v in zip(p, y):
-                        s, _, _ = cost_saving(pred_v, actual_v, current_nodes)
+                        s, _, _ = cost_saving(
+                            pred_v, actual_v, pred_v,
+                            target_util_forecast, current_nodes)
                         window_savings.append(s)
                     mean_s = np.mean(window_savings)
                     std_s  = np.std(window_savings)
