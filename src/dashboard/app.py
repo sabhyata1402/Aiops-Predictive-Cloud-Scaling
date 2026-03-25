@@ -30,30 +30,32 @@ st.markdown("""
     /* ── Global ── */
     [data-testid="stAppViewContainer"] { background: #f0f4f8; }
 
-    /* ── Sidebar: clean white with blue left accent ── */
+    /* ── Sidebar: blue gradient matching header ── */
     [data-testid="stSidebar"] {
-        background: #ffffff;
-        border-right: 4px solid #1d4ed8;
+        background: linear-gradient(180deg, #1e3a8a 0%, #1d4ed8 55%, #0ea5e9 100%);
     }
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] span,
-    [data-testid="stSidebar"] div { color: #1e293b !important; }
+    [data-testid="stSidebar"] div,
+    [data-testid="stSidebar"] small { color: #dbeafe !important; }
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3 { color: #1d4ed8 !important; font-weight: 700; }
-    [data-testid="stSidebar"] hr { border-color: #e2e8f0; }
+    [data-testid="stSidebar"] h3 { color: #ffffff !important; font-weight: 700; }
+    [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.2); }
+    /* Inputs inside sidebar */
+    [data-testid="stSidebar"] .stSelectbox > div,
+    [data-testid="stSidebar"] .stMultiSelect > div { background: rgba(255,255,255,0.12) !important; border-radius: 6px; }
     [data-testid="stSidebar"] .stButton button {
-        background: #1d4ed8 !important;
-        color: white !important;
+        background: white !important;
+        color: #1d4ed8 !important;
         border: none;
         font-weight: 700;
         border-radius: 8px;
-        padding: 0.55rem 1rem;
-        box-shadow: 0 4px 12px rgba(29,78,216,0.3);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
     [data-testid="stSidebar"] .stButton button:hover {
-        background: #1e40af !important;
+        background: #eff6ff !important;
     }
 
     /* ── Top header banner ── */
@@ -293,6 +295,39 @@ def main():
     models  = load_models()
     results = load_results()
 
+    # ── Sidebar (shared by both tabs) ─────────────────────────────────────────
+    with st.sidebar:
+        st.image("https://img.icons8.com/color/96/cloud.png", width=55)
+        st.markdown("### ⚙️ Controls")
+
+        provider = st.selectbox(
+            "Cloud Provider Dataset",
+            ["alibaba", "azure", "google"],
+            format_func=lambda x: x.capitalize()
+        )
+        model_choice = st.multiselect(
+            "Models to run",
+            ["XGBoost", "Random Forest", "LSTM"],
+            default=["XGBoost", "Random Forest", "LSTM"]
+        )
+        n_samples = st.slider("Windows to analyse", 100, 2000, 500, 100)
+        target    = st.selectbox("Target metric", ["CPU %", "Memory %"])
+
+        st.divider()
+        st.markdown("##### 📐 Scaling Parameters")
+        current_nodes = st.slider("Current node count", 1, 20, 3,
+                                  help="How many nodes your cluster is running right now")
+        target_util = st.slider(
+            "Target utilisation ceiling (%)", 60, 90, 75, 1,
+            help="Keep CPU/Memory below this % — scale out before hitting it"
+        )
+
+        st.divider()
+        run_btn = st.button("🚀 Run Forecast", type="primary",
+                            use_container_width=True)
+        st.divider()
+        st.caption("AWS m5.xlarge · EU-West-1 Dublin · €0.192/hr")
+
     # ── Tabs ──────────────────────────────────────────────────────────────────
     tab1, tab2 = st.tabs(["📊 Forecast Dashboard", "🖥️ Live Monitor"])
 
@@ -312,7 +347,7 @@ def main():
 </div>
 """, unsafe_allow_html=True)
 
-        col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1, 1, 2])
+        col_ctrl1, col_ctrl2, _ = st.columns([1, 1, 2])
         with col_ctrl1:
             refresh_interval = st.selectbox(
                 "Refresh every", [5, 10, 30, 60], index=1,
@@ -324,12 +359,6 @@ def main():
                 help="Runs a k6-style ramp-up → peak → ramp-down load pattern "
                      "(src/monitoring/load_test.js) to demo alerts and auto-scaling"
             )
-        with col_ctrl3:
-            current_nodes_live = st.slider("Current node count", 1, 40, 3, 1)
-            target_util_live = st.slider(
-                "Target utilisation ceiling", 60, 90, 75, 1,
-                help="We recommend keeping CPU/Memory below this % via scale-out"
-            )
 
         if simulate and 'sim_step' not in st.session_state:
             st.session_state.sim_step = 0
@@ -339,7 +368,7 @@ def main():
                 st.session_state.live_history = []
 
         @st.fragment(run_every=refresh_interval)
-        def live_panel(xgb_model):
+        def live_panel(xgb_model, current_nodes_live, target_util_live):
             import math, random, datetime
 
             # ── Metrics source ────────────────────────────────────────────────
@@ -613,44 +642,12 @@ def main():
 </div>
 """, unsafe_allow_html=True)
 
-        live_panel(models.get('xgboost'))
+        live_panel(models.get('xgboost'), current_nodes, target_util)
 
     # ══════════════════════════════════════════════════════════════════════════
     # TAB 1 — FORECAST DASHBOARD (existing content moved here)
     # ══════════════════════════════════════════════════════════════════════════
     with tab1:
-        # ── Sidebar ───────────────────────────────────────────────────────────
-        with st.sidebar:
-            st.image("https://img.icons8.com/color/96/cloud.png", width=60)
-            st.header("⚙️ Controls")
-
-            provider = st.selectbox(
-                "Cloud Provider Dataset",
-                ["alibaba", "azure", "google"],
-                format_func=lambda x: x.capitalize()
-            )
-
-            model_choice = st.multiselect(
-                "Models to run",
-                ["XGBoost", "Random Forest", "LSTM"],
-                default=["XGBoost", "Random Forest", "LSTM"]
-            )
-
-            n_samples = st.slider("Windows to analyse", 100, 2000, 500, 100)
-            target    = st.selectbox("Target metric", ["CPU %", "Memory %"])
-            current_nodes = st.slider("Current node count", 1, 20, 3)
-            target_util_forecast = st.slider(
-                "Target utilisation ceiling", 60, 90, 75, 1,
-                help="Keep headroom below this utilisation when sizing nodes"
-            )
-
-            st.divider()
-            run_btn = st.button("🚀 Run Forecast", type="primary",
-                                use_container_width=True)
-
-            st.divider()
-            st.caption("AWS m5.xlarge · EU-West-1 Dublin · €0.192/hr")
-
         st.markdown("""
 <div class="section-banner">
   <div>
@@ -708,7 +705,7 @@ def main():
                 mean_actual = float(np.mean(y))
                 saving, p_nodes, r_nodes = cost_saving(
                     mean_pred, mean_actual, mean_pred,
-                    target_util_forecast, current_nodes)
+                    target_util, current_nodes)
 
             # KPI row
             cols = st.columns(5)
@@ -836,7 +833,7 @@ def main():
                     for pred_v, actual_v in zip(p, y):
                         s, _, _ = cost_saving(
                             pred_v, actual_v, pred_v,
-                            target_util_forecast, current_nodes)
+                            target_util, current_nodes)
                         window_savings.append(s)
                     mean_s = np.mean(window_savings)
                     std_s  = np.std(window_savings)
