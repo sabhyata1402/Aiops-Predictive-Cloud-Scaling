@@ -27,78 +27,125 @@ st.set_page_config(
 # ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* Global */
-    [data-testid="stAppViewContainer"] { background: #f5f7fa; }
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #111827 35%, #0b1224 100%);
-        padding-top: 0.6rem;
-    }
-    [data-testid="stSidebar"] * { color: #e5e7eb !important; }
-    [data-testid="stSidebar"] .stButton button {
-        background: linear-gradient(135deg,#2563eb,#1d4ed8) !important;
-        color: white !important;
-        border: none; font-weight: 700;
-        box-shadow: 0 6px 16px rgba(37,99,235,0.35);
-    }
-    [data-testid="stSidebar"] hr { border-color: #1f2937; }
+    /* ── Global ── */
+    [data-testid="stAppViewContainer"] { background: #f0f4f8; }
 
-    /* Header banner */
+    /* ── Sidebar: clean white with blue left accent ── */
+    [data-testid="stSidebar"] {
+        background: #ffffff;
+        border-right: 4px solid #1d4ed8;
+    }
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] div { color: #1e293b !important; }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 { color: #1d4ed8 !important; font-weight: 700; }
+    [data-testid="stSidebar"] hr { border-color: #e2e8f0; }
+    [data-testid="stSidebar"] .stButton button {
+        background: #1d4ed8 !important;
+        color: white !important;
+        border: none;
+        font-weight: 700;
+        border-radius: 8px;
+        padding: 0.55rem 1rem;
+        box-shadow: 0 4px 12px rgba(29,78,216,0.3);
+    }
+    [data-testid="stSidebar"] .stButton button:hover {
+        background: #1e40af !important;
+    }
+
+    /* ── Top header banner ── */
     .aiops-header {
-        background: linear-gradient(135deg, #1a237e 0%, #1565c0 60%, #0288d1 100%);
-        padding: 1.4rem 2rem 1.2rem 2rem;
+        background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 55%, #0ea5e9 100%);
+        padding: 1.2rem 1.8rem 1rem 1.8rem;
         border-radius: 12px;
         color: white;
-        margin-bottom: 1.2rem;
+        margin-bottom: 0.6rem;
     }
-    .aiops-header h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 0.2rem 0; }
-    .aiops-header p  { font-size: 0.82rem; opacity: 0.85; margin: 0; }
+    .aiops-header h1 { font-size: 1.5rem; font-weight: 800; margin: 0 0 0.2rem 0; }
+    .aiops-header p  { font-size: 0.8rem; opacity: 0.88; margin: 0; }
 
-    /* KPI metric cards */
+    /* ── Section banner (same style in both tabs) ── */
+    .section-banner {
+        background: linear-gradient(90deg, #1e3a8a, #1d4ed8);
+        padding: 0.65rem 1.2rem;
+        border-radius: 8px;
+        color: white;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+    }
+    .section-banner .sb-title { font-size: 0.95rem; font-weight: 700; }
+    .section-banner .sb-desc  { font-size: 0.78rem; opacity: 0.85; }
+
+    /* ── KPI metric cards ── */
     .metric-card {
-        background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+        background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
         padding: 1rem 1.2rem;
         border-radius: 10px;
         color: white;
         text-align: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
+        box-shadow: 0 2px 8px rgba(29,78,216,0.2);
     }
-    .metric-value { font-size: 2rem; font-weight: 700; margin: 0; }
-    .metric-label { font-size: 0.8rem; opacity: 0.85; margin: 0; }
+    .metric-value { font-size: 1.9rem; font-weight: 700; margin: 0; }
+    .metric-label { font-size: 0.78rem; opacity: 0.85; margin: 0; }
+    .metric-sub   { font-size: 0.68rem; opacity: 0.7; margin: 0; }
 
-    /* Alert cards */
-    .alert-red   { background:#ffebee; border-left:4px solid #c62828;
-                   padding:0.9rem 1rem; border-radius:6px; font-weight:500; }
-    .alert-amber { background:#fff8e1; border-left:4px solid #f57f17;
-                   padding:0.9rem 1rem; border-radius:6px; font-weight:500; }
-    .alert-green { background:#e8f5e9; border-left:4px solid #2e7d32;
-                   padding:0.9rem 1rem; border-radius:6px; font-weight:500; }
+    /* ── Alert cards ── */
+    .alert-red   { background:#fef2f2; border-left:5px solid #dc2626;
+                   padding:0.85rem 1rem; border-radius:6px; color:#7f1d1d;
+                   font-size:0.9rem; line-height:1.5; }
+    .alert-amber { background:#fffbeb; border-left:5px solid #d97706;
+                   padding:0.85rem 1rem; border-radius:6px; color:#78350f;
+                   font-size:0.9rem; line-height:1.5; }
+    .alert-green { background:#f0fdf4; border-left:5px solid #16a34a;
+                   padding:0.85rem 1rem; border-radius:6px; color:#14532d;
+                   font-size:0.9rem; line-height:1.5; }
 
-    /* Section headings */
+    /* ── Section title (for chart headings) ── */
     .section-title {
-        font-size: 1rem; font-weight: 700; color: #1a237e;
-        border-bottom: 2px solid #3f51b5;
-        padding-bottom: 0.3rem; margin-bottom: 1rem;
+        font-size: 0.95rem; font-weight: 700; color: #1e3a8a;
+        border-bottom: 2px solid #1d4ed8;
+        padding-bottom: 0.3rem; margin-bottom: 0.8rem; margin-top: 0.5rem;
     }
 
-    /* Recommendation card */
+    /* ── Scaling recommendation card ── */
     .rec-card {
         padding: 1rem 1.2rem; border-radius: 8px;
-        margin-top: 0.8rem; font-size: 0.9rem;
+        margin-top: 0.8rem; font-size: 0.88rem;
+        border: 1px solid rgba(0,0,0,0.07);
     }
-    .rec-card table { width: 100%; border-collapse: collapse; }
-    .rec-card td { padding: 0.3rem 0.5rem; }
-    .rec-card tr:nth-child(even) { background: rgba(0,0,0,0.04); }
+    .rec-card .rec-title { font-size:0.95rem; font-weight:700; margin-bottom:0.5rem; }
+    .rec-card .rec-action {
+        font-size: 1rem; font-weight: 700;
+        padding: 0.5rem 0.8rem; border-radius: 6px;
+        margin-bottom: 0.6rem; display: inline-block;
+    }
+    .rec-card table { width:100%; border-collapse:collapse; margin-top:0.4rem; }
+    .rec-card td { padding:0.28rem 0.5rem; font-size:0.85rem; }
+    .rec-card tr:nth-child(even) { background:rgba(0,0,0,0.035); }
+    .rec-card td:last-child { font-weight: 600; text-align:right; }
 
-    /* Status dot */
-    .status-dot {
-        display:inline-block; width:10px; height:10px;
-        border-radius:50%; margin-right:6px;
-        animation: pulse 1.5s infinite;
-    }
+    /* ── Live pulsing dot ── */
     @keyframes pulse {
-        0%   { opacity:1; }
-        50%  { opacity:0.4; }
-        100% { opacity:1; }
+        0%,100% { opacity:1; transform:scale(1); }
+        50%      { opacity:0.4; transform:scale(0.85); }
+    }
+    .live-dot {
+        display:inline-block; width:9px; height:9px;
+        background:#16a34a; border-radius:50%;
+        animation: pulse 1.4s infinite; margin-right:5px;
+        vertical-align:middle;
+    }
+    .sim-dot {
+        display:inline-block; width:9px; height:9px;
+        background:#dc2626; border-radius:50%;
+        animation: pulse 0.7s infinite; margin-right:5px;
+        vertical-align:middle;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -254,14 +301,14 @@ def main():
     # ══════════════════════════════════════════════════════════════════════════
     with tab2:
         st.markdown("""
-<div style="background:linear-gradient(90deg,#1a237e,#1565c0);
-            padding:0.8rem 1.2rem;border-radius:8px;color:white;margin-bottom:1rem">
-  <strong style="font-size:1rem">🖥️ Live Cloud Resource Monitor</strong>
-  <span style="font-size:0.8rem;opacity:0.85;margin-left:1rem">
-    Proactive scaling intelligence — monitors CPU &amp; memory in real time,
-    predicts resource pressure before SLA breaches occur, and recommends
-    optimal node counts to minimise cost.
-  </span>
+<div class="section-banner">
+  <div>
+    <div class="sb-title">🖥️ Live Cloud Resource Monitor</div>
+    <div class="sb-desc">
+      Monitors CPU &amp; memory every few seconds · XGBoost predicts resource pressure
+      30 minutes ahead · Recommends exact node count to maintain SLA
+    </div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -346,72 +393,106 @@ def main():
             forecast_30m  = round(min(100, predicted_cpu + trend * 2.5), 1)
             mem_forecast_30m = round(min(100, mem + max(mem - 60, 0) * 0.5), 1)
 
-            # ── Alert — check BOTH cpu and memory with forward look ─────────
-            cpu_breach_now   = predicted_cpu > 85 or cpu > 85
-            mem_breach_now   = mem > 85
-            cpu_breach_30m   = forecast_30m > 85
-            mem_breach_30m   = mem_forecast_30m > 85
-            cpu_warn   = predicted_cpu > 70 or cpu > 70 or forecast_30m > 75
-            mem_warn   = mem > 75 or mem_forecast_30m > 75
+            # ── Alert — time-horizon aware, covers CPU + Memory ───────────────
+            cpu_breach_now = cpu > 85 or predicted_cpu > 85
+            mem_breach_now = mem > 85
+            cpu_breach_30m = forecast_30m > 85
+            mem_breach_30m = mem_forecast_30m > 85
+            cpu_warn       = cpu > 70 or predicted_cpu > 70 or forecast_30m > 75
+            mem_warn       = mem > 75 or mem_forecast_30m > 75
+            any_critical   = cpu_breach_now or mem_breach_now or cpu_breach_30m or mem_breach_30m
+            any_warn       = cpu_warn or mem_warn
 
-            if cpu_breach_now or mem_breach_now or cpu_breach_30m or mem_breach_30m:
-                reasons = []
+            _, p_nodes_alert, _ = cost_saving(
+                predicted_cpu, cpu, forecast_30m,
+                target_util_live, current_nodes_live)
+
+            if any_critical:
+                lines = []
                 if cpu_breach_now:
-                    reasons.append(f"CPU {cpu:.1f}% (pred {predicted_cpu:.1f}%)")
-                if cpu_breach_30m:
-                    reasons.append(f"CPU forecast 30m {forecast_30m:.1f}%")
+                    lines.append(
+                        f"CPU is at <b>{cpu:.1f}%</b> — predicted <b>{predicted_cpu:.1f}%</b> "
+                        f"in next {refresh_interval}s · SLA threshold breached"
+                    )
+                if cpu_breach_30m and not cpu_breach_now:
+                    lines.append(
+                        f"CPU will reach <b>{forecast_30m:.1f}%</b> in ~30 minutes "
+                        f"(SLA breach imminent)"
+                    )
                 if mem_breach_now:
-                    reasons.append(f"Memory {mem:.1f}%")
-                if mem_breach_30m:
-                    reasons.append(f"Memory forecast 30m {mem_forecast_30m:.1f}%")
+                    lines.append(
+                        f"Memory at <b>{mem:.1f}%</b> — exceeds SLA threshold"
+                    )
+                if mem_breach_30m and not mem_breach_now:
+                    lines.append(
+                        f"Memory will reach <b>{mem_forecast_30m:.1f}%</b> in ~30 minutes"
+                    )
+                lines.append(
+                    f"→ <b>Increase nodes immediately: "
+                    f"{current_nodes_live} → {p_nodes_alert} nodes</b>"
+                )
                 st.markdown(
-                    f'<div class="alert-red">🔴 <strong>CRITICAL — SLA BREACH PREDICTED</strong> · '
-                    f" · ".join(reasons) + ' · Scale up immediately (window < 30m)</div>',
+                    f'<div class="alert-red">🔴 <strong>CRITICAL — SLA BREACH RISK</strong><br>'
+                    + "<br>".join(lines) + "</div>",
                     unsafe_allow_html=True
                 )
-            elif cpu_warn or mem_warn:
-                reasons = []
+            elif any_warn:
+                lines = []
                 if cpu_warn:
-                    reasons.append(f"CPU trend {forecast_30m:.1f}% in 30m")
+                    lines.append(
+                        f"CPU at <b>{cpu:.1f}%</b> — forecast <b>{forecast_30m:.1f}%</b> "
+                        f"in ~30 min · approaching SLA threshold"
+                    )
                 if mem_warn:
-                    reasons.append(f"Memory trend {mem_forecast_30m:.1f}% in 30m")
+                    lines.append(
+                        f"Memory at <b>{mem:.1f}%</b> — forecast <b>{mem_forecast_30m:.1f}%</b> "
+                        f"in ~30 min"
+                    )
+                lines.append(
+                    f"→ <b>Consider scaling: {current_nodes_live} → {p_nodes_alert} nodes "
+                    f"within 15 minutes</b>"
+                )
                 st.markdown(
-                    f'<div class="alert-amber">🟡 <strong>WARNING — Approaching threshold</strong> · '
-                    f" · ".join(reasons) + ' · Consider proactive scale-out</div>',
+                    f'<div class="alert-amber">🟡 <strong>WARNING — Approaching threshold</strong><br>'
+                    + "<br>".join(lines) + "</div>",
                     unsafe_allow_html=True
                 )
             else:
                 st.markdown(
-                    f'<div class="alert-green">🟢 <strong>NORMAL — All metrics within SLA</strong> · '
-                    f'CPU {cpu:.1f}% · Memory {mem:.1f}% · '
-                    f'No breach projected in next 30m (CPU {forecast_30m:.1f}%, Mem {mem_forecast_30m:.1f}%)</div>',
+                    f'<div class="alert-green">🟢 <strong>NORMAL — All metrics within SLA</strong><br>'
+                    f'CPU <b>{cpu:.1f}%</b> now · forecast <b>{forecast_30m:.1f}%</b> in 30m &nbsp;|&nbsp; '
+                    f'Memory <b>{mem:.1f}%</b> now · forecast <b>{mem_forecast_30m:.1f}%</b> in 30m<br>'
+                    f'No SLA breach projected · Current <b>{current_nodes_live} nodes</b> sufficient</div>',
                     unsafe_allow_html=True
                 )
 
-            st.markdown("<div style='margin-top:0.6rem'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:0.7rem'></div>", unsafe_allow_html=True)
 
             # ── KPI tiles ─────────────────────────────────────────────────────
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4, c5 = st.columns(5)
             with c1:
-                cpu_delta = cpu - 50
-                st.metric("CPU Utilisation", f"{cpu:.1f}%",
-                          delta=f"{cpu_delta:+.1f}% vs baseline",
+                st.metric("CPU (Now)", f"{cpu:.1f}%",
+                          delta=f"{cpu - 50:+.1f}% vs baseline",
                           delta_color="inverse")
             with c2:
-                mem_delta = mem - 60
-                st.metric("Memory Utilisation", f"{mem:.1f}%",
-                          delta=f"{mem_delta:+.1f}% vs baseline",
+                st.metric("CPU Forecast (30m)", f"{forecast_30m:.1f}%",
+                          delta=f"{forecast_30m - cpu:+.1f}% trend",
                           delta_color="inverse")
             with c3:
-                st.metric("Disk Utilisation", f"{disk:.1f}%")
-            with c4:
-                st.metric("XGBoost Forecast (next)", f"{predicted_cpu:.1f}%",
-                          delta=f"{predicted_cpu - cpu:+.1f}% trend",
+                st.metric("Memory (Now)", f"{mem:.1f}%",
+                          delta=f"{mem - 60:+.1f}% vs baseline",
                           delta_color="inverse")
+            with c4:
+                st.metric("Memory Forecast (30m)", f"{mem_forecast_30m:.1f}%",
+                          delta=f"{mem_forecast_30m - mem:+.1f}% trend",
+                          delta_color="inverse")
+            with c5:
+                st.metric("Disk", f"{disk:.1f}%")
 
             st.markdown(
-                f'<p style="font-size:0.78rem;color:#666;margin-top:0.2rem">'
-                f'⏱ {ts} &nbsp;·&nbsp; {mode_badge} &nbsp;·&nbsp; '
+                f'<p style="font-size:0.76rem;color:#64748b;margin-top:0.15rem">'
+                f'<span class="{"sim-dot" if simulate else "live-dot"}"></span>'
+                f'&nbsp;{ts} &nbsp;·&nbsp; {mode_badge} &nbsp;·&nbsp; '
                 f'auto-refresh every {refresh_interval}s</p>',
                 unsafe_allow_html=True
             )
@@ -487,34 +568,48 @@ def main():
                 predicted_cpu, cpu, forecast_30m, target_util_live,
                 current_nodes_live)
 
-            if cpu_breach_now or mem_breach_now or cpu_breach_30m or mem_breach_30m:
-                rc, ri = "#ffebee", "🚨"
-            elif cpu_warn or mem_warn:
-                rc, ri = "#fff8e1", "⚠️"
-            else:
-                rc, ri = "#e8f5e9", "✅"
+            nodes_delta = p_nodes_live - current_nodes_live
 
-            scale_action = (
-                f"Scale-out to **{p_nodes_live} nodes** recommended immediately"
-                if cpu_breach_now or mem_breach_now or cpu_breach_30m or mem_breach_30m else
-                f"Scale-out to **{p_nodes_live} nodes** within 15 min"
-                if cpu_warn or mem_warn else
-                f"**{p_nodes_live} nodes** — current capacity adequate"
-            )
+            if any_critical:
+                rc  = "#fef2f2"
+                ri  = "🚨"
+                urgency = "IMMEDIATELY — SLA breach window &lt; 30 minutes"
+                action_bg = "#dc2626"; action_fg = "white"
+            elif any_warn:
+                rc  = "#fffbeb"
+                ri  = "⚠️"
+                urgency = "Within 15 minutes — breach projected in ~30m"
+                action_bg = "#d97706"; action_fg = "white"
+            else:
+                rc  = "#f0fdf4"
+                ri  = "✅"
+                urgency = "No action required — monitor and review in 30m"
+                action_bg = "#16a34a"; action_fg = "white"
+
+            if nodes_delta > 0:
+                action_txt = f"Increase: {current_nodes_live} → {p_nodes_live} nodes (+{nodes_delta})"
+            else:
+                action_txt = f"Hold: {current_nodes_live} nodes — capacity sufficient"
 
             st.markdown(f"""
 <div class="rec-card" style="background:{rc}">
-<strong>{ri} Scaling Recommendation</strong> — {scale_action}
-<table style="margin-top:0.6rem">
-    <tr><td>Current nodes</td><td><strong>{current_nodes_live}</strong></td></tr>
-  <tr><td>Recommended (proactive)</td><td><strong>{p_nodes_live}</strong></td></tr>
-  <tr><td>Reactive baseline (without AIOps)</td><td>{r_nodes_live}</td></tr>
+  <div class="rec-title">{ri} Proactive Scaling Recommendation</div>
+  <div class="rec-action" style="background:{action_bg};color:{action_fg}">
+    {action_txt}
+  </div>
+  <div style="font-size:0.8rem;color:#475569;margin-bottom:0.4rem">
+    ⏰ {urgency}
+  </div>
+  <table>
+    <tr><td>Current nodes</td><td>{current_nodes_live}</td></tr>
+    <tr><td>Recommended nodes (proactive AIOps)</td><td><b>{p_nodes_live}</b></td></tr>
+    <tr><td>Nodes needed reactively (without AIOps)</td><td>{r_nodes_live}</td></tr>
     <tr><td>Target utilisation ceiling</td><td>{target_util_live}%</td></tr>
-    <tr><td>CPU forecast (30m)</td><td>{forecast_30m:.1f}%</td></tr>
-    <tr><td>Memory forecast (30m)</td><td>{mem_forecast_30m:.1f}%</td></tr>
-  <tr><td>Estimated daily saving</td><td><strong>€{saving_live:.2f}</strong>
-      &nbsp;<small style="color:#666">vs reactive scaling</small></td></tr>
-</table>
+    <tr><td>CPU forecast in 30 min</td><td>{forecast_30m:.1f}%</td></tr>
+    <tr><td>Memory forecast in 30 min</td><td>{mem_forecast_30m:.1f}%</td></tr>
+    <tr><td>Estimated daily saving vs reactive</td>
+        <td style="color:#16a34a">€{saving_live:.2f}</td></tr>
+  </table>
 </div>
 """, unsafe_allow_html=True)
 
@@ -555,6 +650,18 @@ def main():
 
             st.divider()
             st.caption("AWS m5.xlarge · EU-West-1 Dublin · €0.192/hr")
+
+        st.markdown("""
+<div class="section-banner">
+  <div>
+    <div class="sb-title">📊 Forecast Dashboard</div>
+    <div class="sb-desc">
+      Historical workload replay · XGBoost · Random Forest · LSTM predictions ·
+      SHAP feature importance · Cost saving analysis
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
         # ── Load data ─────────────────────────────────────────────────────────
         test_df, fcols = load_data(provider)
