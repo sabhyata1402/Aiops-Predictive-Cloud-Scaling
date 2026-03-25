@@ -193,29 +193,74 @@ def main():
             "with XGBoost prediction. Updates in background — no page blink."
         )
 
-        col_ctrl1, col_ctrl2 = st.columns([1, 4])
+        col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1, 1, 3])
         with col_ctrl1:
             refresh_interval = st.selectbox(
                 "Refresh every", [5, 10, 30, 60], index=1,
                 format_func=lambda x: f"{x}s"
             )
+        with col_ctrl2:
+            simulate = st.toggle("🔥 Simulate Load Spike", value=False,
+                                 help="Injects a k6-style ramp-up/peak/ramp-down "
+                                      "load pattern to demo alerts & scaling")
+        if simulate and 'sim_step' not in st.session_state:
+            st.session_state.sim_step = 0
+        if not simulate:
+            st.session_state.sim_step = 0
 
         @st.fragment(run_every=refresh_interval)
         def live_panel(xgb_model):
-            cpu, mem, disk, ts = get_live_metrics()
+            import math, datetime
+
+            # ── Metrics source: real or simulated ─────────────────────────────
+            if st.session_state.get('sim_step', 0) > 0 or simulate:
+                # Advance simulation step each fragment run
+                step = st.session_state.get('sim_step', 0)
+                st.session_state.sim_step = step + 1
+                t = step  # 0-based tick
+
+                # Load profile: ramp-up 0-10, peak 10-25, ramp-down 25-35
+                if t < 10:
+                    base_cpu = 15 + t * 7          # 15 → 85 ramp-up
+                elif t < 25:
+                    base_cpu = 85 + 8 * math.sin(t * 0.8)  # noisy peak
+                elif t < 35:
+                    base_cpu = 85 - (t - 25) * 7  # 85 → 15 ramp-down
+                else:
+                    base_cpu = 15 + (t % 5) * 2   # idle with jitter
+                    st.session_state.sim_step = 0  # loop
+
+                import random
+                cpu  = round(min(max(base_cpu + random.uniform(-3, 3), 5), 100), 1)
+                mem  = round(min(40 + cpu * 0.35 + random.uniform(-2, 2), 95), 1)
+                disk = 38.0
+                ts   = datetime.datetime.utcnow().strftime("%H:%M:%S UTC")
+                source_label = "⚡ Simulated load test (k6 pattern)"
+            else:
+                cpu, mem, disk, ts = get_live_metrics()
+                source_label = "Streamlit Community Cloud (Linux x86_64)"
 
             predicted_cpu = live_predict(xgb_model, cpu, mem) \
-                if xgb_model else cpu * 1.02
+                if xgb_model else round(cpu * 1.05, 1)
 
-            # Alert banner
+            # ── Alert banner ──────────────────────────────────────────────────
             if predicted_cpu > 85:
-                st.error(f"🔴 CRITICAL — Predicted CPU {predicted_cpu:.1f}% · Scale up NOW")
+                st.error(
+                    f"🔴 **CRITICAL** — Predicted CPU {predicted_cpu:.1f}% exceeds SLA · "
+                    f"Scale up immediately!"
+                )
             elif predicted_cpu > 70:
-                st.warning(f"🟡 WARNING — Predicted CPU {predicted_cpu:.1f}% · Monitor closely")
+                st.warning(
+                    f"🟡 **WARNING** — Predicted CPU {predicted_cpu:.1f}% · "
+                    f"Approaching SLA threshold — consider scaling"
+                )
             else:
-                st.success(f"🟢 NORMAL — Predicted CPU {predicted_cpu:.1f}% · System healthy")
+                st.success(
+                    f"🟢 **NORMAL** — Predicted CPU {predicted_cpu:.1f}% · "
+                    f"Current capacity sufficient"
+                )
 
-            # KPI tiles
+            # ── KPI tiles ─────────────────────────────────────────────────────
             c1, c2, c3, c4 = st.columns(4)
             with c1:
                 st.metric("CPU Now", f"{cpu:.1f}%",
@@ -229,22 +274,18 @@ def main():
                           delta=f"{predicted_cpu - cpu:+.1f}% trend",
                           delta_color="inverse")
 
-            st.caption(
-                f"⏱ {ts} · Streamlit Community Cloud (Linux x86_64) · "
-                f"refreshing every {refresh_interval}s"
-            )
+            st.caption(f"⏱ {ts} · {source_label} · refreshing every {refresh_interval}s")
 
-            # Accumulate rolling history in session state
+            # ── Rolling history ───────────────────────────────────────────────
             if 'live_history' not in st.session_state:
                 st.session_state.live_history = []
             st.session_state.live_history.append(
                 {'time': ts, 'cpu': cpu, 'mem': mem, 'predicted': predicted_cpu}
             )
             st.session_state.live_history = st.session_state.live_history[-60:]
-
             hist_df = pd.DataFrame(st.session_state.live_history)
 
-            # Live chart — updates in place like Grafana
+            # ── Live chart ───────────────────────────────────────────────────
             fig_live = go.Figure()
             if len(hist_df) > 1:
                 fig_live.add_trace(go.Scatter(
@@ -270,29 +311,43 @@ def main():
             )
             fig_live.update_layout(
                 height=400,
-                title=dict(text="Live Resource Usage — Streamlit Cloud Server",
-                           font=dict(size=14)),
+                title=dict(text="Live Resource Usage — Cloud Server", font=dict(size=14)),
                 xaxis_title="Time (UTC)", yaxis_title="Utilisation (%)",
                 yaxis=dict(range=[0, 105]),
                 plot_bgcolor='#fafafa', paper_bgcolor='white',
                 legend=dict(orientation='h', yanchor='bottom', y=1.02),
                 margin=dict(t=50, l=50, r=20, b=40),
-                uirevision='live'   # keeps zoom/pan stable between updates
+                uirevision='live'
             )
             st.plotly_chart(fig_live, use_container_width=True)
 
-            # Scaling recommendation
+            # ── Scaling recommendation ────────────────────────────────────────
             saving_live, p_nodes_live, r_nodes_live = cost_saving(
                 predicted_cpu, cpu, 3)
+            if predicted_cpu > 70:
+                rec_color = "#fff3e0"
+                rec_icon  = "⚠️"
+            elif predicted_cpu > 85:
+                rec_color = "#ffebee"
+                rec_icon  = "🚨"
+            else:
+                rec_color = "#e8f5e9"
+                rec_icon  = "✅"
+
             st.markdown(f"""
-            **Scaling Recommendation**
-            | Node count | Value |
-            |---|---|
-            | Current | 3 |
-            | Recommended (proactive) | **{p_nodes_live}** |
-            | Reactive baseline | {r_nodes_live} |
-            | Est. daily saving | **€{saving_live:.2f}** |
-            """)
+<div style="background:{rec_color};padding:1rem;border-radius:8px;margin-top:0.5rem">
+
+{rec_icon} **Scaling Recommendation**
+
+| | |
+|---|---|
+| Current nodes | **3** |
+| Proactive (recommended) | **{p_nodes_live}** |
+| Reactive baseline | {r_nodes_live} |
+| Est. daily saving | **€{saving_live:.2f}** |
+
+</div>
+            """, unsafe_allow_html=True)
 
         live_panel(models.get('xgboost'))
 
