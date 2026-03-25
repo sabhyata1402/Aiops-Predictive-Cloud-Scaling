@@ -46,6 +46,17 @@ st.markdown("""
     /* Inputs inside sidebar */
     [data-testid="stSidebar"] .stSelectbox > div,
     [data-testid="stSidebar"] .stMultiSelect > div { background: rgba(255,255,255,0.12) !important; border-radius: 6px; }
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div {
+        background: #f8fafc !important;
+        color: #0f172a !important;
+    }
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] span,
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] span,
+    [data-testid="stSidebar"] .stSelectbox input,
+    [data-testid="stSidebar"] .stMultiSelect input {
+        color: #0f172a !important;
+    }
     [data-testid="stSidebar"] .stButton button {
         background: white !important;
         color: #1d4ed8 !important;
@@ -71,7 +82,7 @@ st.markdown("""
 
     /* ── Section banner (same style in both tabs) ── */
     .section-banner {
-        background: linear-gradient(90deg, #1e3a8a, #1d4ed8);
+        background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 55%, #0ea5e9 100%);
         padding: 0.65rem 1.2rem;
         border-radius: 8px;
         color: white;
@@ -85,13 +96,17 @@ st.markdown("""
 
     /* ── KPI metric cards ── */
     .metric-card {
-        background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
+        background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 55%, #0ea5e9 100%);
         padding: 1rem 1.2rem;
         border-radius: 10px;
         color: white;
         text-align: center;
         margin-bottom: 0.4rem;
         box-shadow: 0 2px 8px rgba(29,78,216,0.2);
+        min-height: 108px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     .metric-value { font-size: 1.9rem; font-weight: 700; margin: 0; }
     .metric-label { font-size: 0.78rem; opacity: 0.85; margin: 0; }
@@ -315,7 +330,7 @@ def main():
 
         st.divider()
         st.markdown("##### 📐 Scaling Parameters")
-        current_nodes = st.slider("Current node count", 1, 20, 3,
+        current_nodes = st.slider("Current node count", 1, 40, 3,
                                   help="How many nodes your cluster is running right now")
         target_util = st.slider(
             "Target utilisation ceiling (%)", 60, 90, 75, 1,
@@ -724,8 +739,7 @@ def main():
                     <div class="metric-card">
                         <p class="metric-value">{val}</p>
                         <p class="metric-label">{label}</p>
-                        {f'<p style="font-size:0.7rem;opacity:0.7">{sub}</p>'
-                         if sub else ''}
+                        <p class="metric-sub">{sub if sub else '&nbsp;'}</p>
                     </div>""", unsafe_allow_html=True)
 
             st.divider()
