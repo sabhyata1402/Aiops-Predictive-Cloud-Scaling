@@ -67,8 +67,46 @@ def load_alibaba(sample_machines=80):
 def load_azure():
     """Load Azure VM dataset → standard format."""
     path = Path("data/raw/azure/vm_cpu_readings.csv")
-    print(f"Loading Azure from {path}...")
-    df = pd.read_csv(path)
+    gz_path = Path("data/raw/azure/vm_cpu_readings.csv.gz")
+
+    if path.exists():
+        print(f"Loading Azure from {path}...")
+        df = pd.read_csv(path)
+    elif gz_path.exists():
+        import gzip, io
+        print(f"Loading Azure from {gz_path} (truncation-tolerant)...")
+        # Read as many bytes as possible — handles truncated gzip files
+        try:
+            with gzip.open(gz_path, 'rb') as f:
+                raw = f.read()
+        except EOFError:
+            # Truncated file: read whatever was decompressed before the error
+            raw = b''
+            with open(gz_path, 'rb') as fh:
+                d = gzip.GzipFile(fileobj=fh)
+                try:
+                    raw = d.read()
+                except EOFError:
+                    raw = d._buffer.raw._buffer if hasattr(d, '_buffer') else raw
+            if not raw:
+                import zlib
+                with open(gz_path, 'rb') as fh:
+                    fh.read(10)            # skip gzip header
+                    raw_deflate = fh.read()
+                try:
+                    raw = zlib.decompress(raw_deflate, -15)
+                except Exception:
+                    raw = zlib.decompress(raw_deflate, -15,
+                                          bufsize=1024 * 1024 * 512)
+        text = raw.decode('utf-8', errors='replace')
+        # Trim to last complete line
+        last_nl = text.rfind('\n')
+        if last_nl > 0:
+            text = text[:last_nl + 1]
+        df = pd.read_csv(io.StringIO(text), header=None if '\n' in text[:200] and
+                         not text[:200].startswith('v') else 'infer')
+    else:
+        raise FileNotFoundError("Azure dataset not found in data/raw/azure/")
 
     col_map = {'vm_id': 'node_id', 'timestamp': 'ts', 'cpu_avg': 'cpu',
                'mem_avg': 'mem'}

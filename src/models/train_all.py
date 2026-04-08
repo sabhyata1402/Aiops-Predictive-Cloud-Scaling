@@ -81,14 +81,16 @@ def model_size_mb(path):
 
 
 def to_jsonable(obj):
+    if isinstance(obj, bool):           # must be before int check (bool subclasses int)
+        return obj
     if isinstance(obj, dict):
         return {k: to_jsonable(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [to_jsonable(v) for v in obj]
-    if isinstance(obj, tuple):
+    if isinstance(obj, (list, tuple)):
         return [to_jsonable(v) for v in obj]
     if isinstance(obj, np.ndarray):
         return obj.tolist()
+    if isinstance(obj, np.bool_):
+        return bool(obj)
     if isinstance(obj, (np.integer, np.floating)):
         return obj.item()
     return obj
