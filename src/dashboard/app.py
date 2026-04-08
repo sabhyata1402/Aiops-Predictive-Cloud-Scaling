@@ -196,15 +196,32 @@ def load_models():
     except:
         models['rf'] = None
     try:
-        from src.models.train_all import LSTMForecaster
-        ckpt = torch.load("data/models/lstm_model.pt", map_location='cpu')
+        import torch.nn as nn
+        class LSTMForecaster(torch.nn.Module):
+            def __init__(self, n_features, hidden=64, n_layers=2, dropout=0.2):
+                super().__init__()
+                self.lstm    = nn.LSTM(n_features, hidden, n_layers,
+                                       batch_first=True,
+                                       dropout=dropout if n_layers > 1 else 0)
+                self.fc1     = nn.Linear(hidden, 32)
+                self.relu    = nn.ReLU()
+                self.dropout = nn.Dropout(dropout)
+                self.fc2     = nn.Linear(32, 1)
+            def forward(self, x):
+                out, _ = self.lstm(x)
+                out = out[:, -1, :]
+                out = self.dropout(self.relu(self.fc1(out)))
+                return self.fc2(out).squeeze(-1)
+
+        ckpt = torch.load("data/models/lstm_model.pt", map_location='cpu',
+                          weights_only=False)
         lstm = LSTMForecaster(n_features=ckpt['n_features'])
         lstm.load_state_dict(ckpt['model_state'])
         lstm.eval()
         models['lstm'] = lstm
         models['lstm_n_features'] = ckpt['n_features']
         models['lstm_seq_len']    = ckpt.get('seq_len', 6)
-    except:
+    except Exception as e:
         models['lstm'] = None
     return models
 
