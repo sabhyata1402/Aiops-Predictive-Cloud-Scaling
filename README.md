@@ -16,19 +16,16 @@ python -m venv venv
 source venv/bin/activate        # Mac/Linux
 venv\Scripts\activate           # Windows
 
-# 3. Run setup — downloads data, installs packages
+# 3. Run setup — installs packages, downloads REAL datasets, and preprocesses
 python setup_and_download.py
 
-# 4. Process data
-python src/data/preprocessor.py
-
-# 5. Train all 3 models (takes 10–30 minutes)
+# 4. Train all 3 models (takes 10–30 minutes)
 python src/models/train_all.py
 
-# 6. Generate SHAP analysis and figures
+# 5. Generate SHAP analysis and figures
 python src/explainability/shap_analysis.py
 
-# 7. Launch dashboard
+# 6. Launch dashboard
 streamlit run src/dashboard/app.py
 ```
 
@@ -73,7 +70,7 @@ h9mlai_project/
 > If auto-download fails, synthetic data matching each format is created automatically.
 > Real data download instructions:
 > - Alibaba: https://github.com/alibaba/clusterdata/blob/master/cluster-trace-v2018/trace_2018.md
-> - Azure: https://github.com/Azure/AzurePublicDataset
+> This project is configured for real dataset download and processing on
 > - Google: https://github.com/google/cluster-data
 
 ---

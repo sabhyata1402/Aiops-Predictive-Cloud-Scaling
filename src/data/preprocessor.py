@@ -150,9 +150,12 @@ def engineer_features(df, target_horizon=3):
         feat['ts']       = grp['ts']
         feat['provider'] = grp['provider']
 
-        # Target variables (what we predict)
-        feat['target_cpu'] = grp['cpu'].shift(-target_horizon)
-        feat['target_mem'] = grp['mem'].shift(-target_horizon)
+        # Target variables — multiple forecast horizons
+        # h1 ≈ 10 min (1 step), h3 = 30 min (3 steps), h6 = 60 min (6 steps)
+        feat['target_cpu']    = grp['cpu'].shift(-3)   # primary: 30 min
+        feat['target_cpu_h1'] = grp['cpu'].shift(-1)   # short:   10 min
+        feat['target_cpu_h6'] = grp['cpu'].shift(-6)   # long:    60 min
+        feat['target_mem']    = grp['mem'].shift(-3)
 
         # Raw current values
         feat['cpu'] = grp['cpu']
@@ -230,8 +233,9 @@ def temporal_split(df, train_frac=0.70, val_frac=0.15):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_feature_cols(df):
-    exclude = {'node_id', 'ts', 'provider', 'target_cpu', 'target_mem',
-               'sla_breach'}
+    exclude = {'node_id', 'ts', 'provider',
+               'target_cpu', 'target_cpu_h1', 'target_cpu_h6',
+               'target_mem', 'sla_breach'}
     return [c for c in df.columns if c not in exclude]
 
 

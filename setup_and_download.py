@@ -9,47 +9,32 @@ Run this FIRST before anything else:
 
 What this does:
 1. Installs all required packages
-2. Downloads Alibaba 2018 Cluster Trace (sample)
-3. Downloads Azure Public Dataset
-4. Downloads Google Cluster Traces sample
-5. Verifies all data is ready
+2. Downloads real Alibaba 2018 Cluster Trace data
+3. Downloads real Azure Public Dataset data
+4. Downloads real Google cluster trace data
+5. Verifies the datasets are real (not synthetic)
+6. Runs preprocessing automatically
 """
 
 import os
 import sys
 import subprocess
-import urllib.request
-import zipfile
 import gzip
 import shutil
-import hashlib
 from pathlib import Path
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 1 — Install packages
 # ─────────────────────────────────────────────────────────────────────────────
 def install_packages():
-    packages = [
-        "pandas==2.1.4",
-        "numpy==1.26.3",
-        "scikit-learn==1.4.2",
-        "xgboost==2.0.3",
-        "torch==2.1.2",
-        "shap==0.44.1",
-        "matplotlib==3.8.2",
-        "seaborn==0.13.2",
-        "plotly==5.18.0",
-        "streamlit==1.31.0",
-        "optuna==3.5.0",
-        "scipy==1.12.0",
-        "tqdm==4.66.2",
-        "joblib==1.3.2",
-        "pyarrow==15.0.0",
-        "requests==2.31.0",
-    ]
-    print("Installing packages...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install"] + packages,
-                          stdout=subprocess.DEVNULL)
+    print("Installing packages from requirements.txt...")
+    req = Path("requirements.txt")
+    if not req.exists():
+        raise RuntimeError("requirements.txt not found in project root")
+
+    subprocess.check_call([
+        sys.executable, "-m", "pip", "install", "-r", str(req)
+    ])
     print("✅ Packages installed")
 
 
@@ -91,6 +76,66 @@ def download_file(url, dest_path, label):
         )
 
 
+def _is_synthetic_alibaba(csv_path):
+    import pandas as pd
+    if not csv_path.exists():
+        return False
+    df = pd.read_csv(csv_path, nrows=200)
+    if 'machine_id' not in df.columns:
+        return False
+    machine_ids = df['machine_id'].astype(str).head(30)
+    return machine_ids.str.match(r'^m_\d{4}$').mean() > 0.8
+
+
+def _is_synthetic_azure(csv_path):
+    import pandas as pd
+    if not csv_path.exists():
+        return False
+    df = pd.read_csv(csv_path, nrows=200)
+    if 'vm_id' not in df.columns:
+        return False
+    vm_ids = df['vm_id'].astype(str).head(30)
+    return vm_ids.str.match(r'^vm_\d{3}$').mean() > 0.8
+
+
+def _is_synthetic_google(csv_path):
+    import pandas as pd
+    if not csv_path.exists():
+        return False
+    df = pd.read_csv(csv_path, nrows=200)
+    if 'machine_id' not in df.columns:
+        return False
+    machine_ids = df['machine_id'].astype(str).head(30)
+    return machine_ids.str.match(r'^g_\d{4}$').mean() > 0.8
+
+
+def assert_real_data():
+    checks = [
+        ('Alibaba', Path('data/raw/alibaba/machine_usage.csv'), _is_synthetic_alibaba),
+        ('Azure', Path('data/raw/azure/vm_cpu_readings.csv'), _is_synthetic_azure),
+        ('Google', Path('data/raw/google/machine_events.csv'), _is_synthetic_google),
+    ]
+
+    problems = []
+    for name, path, is_synthetic in checks:
+        if not path.exists():
+            problems.append(f"{name}: missing file at {path}")
+            continue
+        if is_synthetic(path):
+            problems.append(f"{name}: synthetic-looking dataset at {path}")
+
+    if problems:
+        raise RuntimeError(
+            "Real data requirement failed:\n- " + "\n- ".join(problems)
+        )
+
+
+def run_preprocessing():
+    print("\n── Running Preprocessing ─────────────────────")
+    subprocess.check_call([sys.executable, "src/data/preprocessor.py"])
+    print("✅ Preprocessing completed")
+
+
 def download_alibaba():
     """
     Alibaba 2018 Cluster Trace
@@ -101,15 +146,25 @@ def download_alibaba():
     base = Path("data/raw/alibaba")
     base.mkdir(parents=True, exist_ok=True)
 
-    # Official link referenced by the Alibaba GitHub repo docs.
-    url = ("http://aliopentrace.oss-cn-beijing.aliyuncs.com/"
-           "v2018Traces/machine_usage.tar.gz")
-    download_file(url, "data/raw/alibaba/machine_usage.tar.gz",
-                  "Alibaba machine_usage.tar.gz")
-
-    # Extract
     tar_path = Path("data/raw/alibaba/machine_usage.tar.gz")
     csv_path = Path("data/raw/alibaba/machine_usage.csv")
+
+    if csv_path.exists() and not _is_synthetic_alibaba(csv_path):
+        print("✅ Already downloaded: Alibaba real dataset")
+        return
+
+    if csv_path.exists() and _is_synthetic_alibaba(csv_path):
+        print("⚠️ Found synthetic Alibaba file. Replacing with real dataset...")
+        csv_path.unlink(missing_ok=True)
+
+    # Official link referenced by the Alibaba GitHub repo docs.
+    url = (
+        "https://aliopentrace.oss-cn-beijing.aliyuncs.com/"
+        "v2018Traces/machine_usage.tar.gz"
+    )
+    download_file(url, str(tar_path), "Alibaba machine_usage.tar.gz")
+
+    # Extract
     if tar_path.exists() and not csv_path.exists():
         print("Extracting Alibaba data...")
         import tarfile
@@ -207,12 +262,18 @@ def download_azure():
 
     # Azure hosts VM traces on GitHub releases
     url = ("https://raw.githubusercontent.com/Azure/AzurePublicDataset/"
-           "master/data/AzurePublicDatasetLinksV2.txt")
+           "master/AzurePublicDatasetLinksV2.txt")
 
     csv_path = Path("data/raw/azure/vm_cpu_readings.csv")
-    if csv_path.exists():
-        print("✅ Already downloaded: Azure dataset")
+    gz_path = Path("data/raw/azure/vm_cpu_readings.csv.gz")
+
+    if csv_path.exists() and not _is_synthetic_azure(csv_path):
+        print("✅ Already downloaded: Azure real dataset")
         return
+
+    if csv_path.exists() and _is_synthetic_azure(csv_path):
+        print("⚠️ Found synthetic Azure file. Replacing with real dataset...")
+        csv_path.unlink(missing_ok=True)
 
     import requests
     r = requests.get(url, timeout=30)
@@ -222,10 +283,8 @@ def download_azure():
     if not links:
         raise RuntimeError("Could not find Azure vm_cpu_readings link in AzurePublicDatasetLinksV2.txt")
 
-    download_file(links[0], "data/raw/azure/vm_cpu_readings.csv.gz",
-                  "Azure VM CPU readings (part 1)")
+    download_file(links[0], str(gz_path), "Azure VM CPU readings (part 1)")
 
-    gz_path = Path("data/raw/azure/vm_cpu_readings.csv.gz")
     with gzip.open(gz_path, 'rb') as f_in:
         with open(csv_path, 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
@@ -244,16 +303,22 @@ def download_google():
     google_dir.mkdir(parents=True, exist_ok=True)
 
     out_csv = google_dir / "machine_events.csv"
-    if out_csv.exists():
-        print("✅ Already downloaded: Google dataset")
+    source_gz = google_dir / "google_cluster_data_v1.csv.gz"
+
+    if out_csv.exists() and not _is_synthetic_google(out_csv):
+        print("✅ Already downloaded: Google real dataset")
         return
 
-    source_gz = google_dir / "google_cluster_data_v1.csv.gz"
-    source_url = ("http://commondatastorage.googleapis.com/"
-                  "clusterdata-misc/google-cluster-data-1.csv.gz")
+    if out_csv.exists() and _is_synthetic_google(out_csv):
+        print("⚠️ Found synthetic Google file. Replacing with real dataset...")
+        out_csv.unlink(missing_ok=True)
 
-    download_file(source_url, str(source_gz),
-                  "Google ClusterData v1 (csv.gz)")
+    source_url = (
+        "https://commondatastorage.googleapis.com/"
+        "clusterdata-misc/google-cluster-data-1.csv.gz"
+    )
+
+    download_file(source_url, str(source_gz), "Google ClusterData v1 (csv.gz)")
 
     print("Converting Google dataset to machine_events.csv...")
     df = pd.read_csv(source_gz, sep=r"\s+", engine="python")
@@ -396,14 +461,18 @@ if __name__ == "__main__":
 
     install_packages()
 
-    print("\n── Downloading Datasets ───────────────────────")
+    print("\n── Downloading Real Datasets ──────────────────")
     download_alibaba()
     download_azure()
     download_google()
 
     verify_data()
+    assert_real_data()
+    print("✅ Real-data check passed for all providers")
 
-    print("✅ Setup complete! Now run:")
-    print("   python src/data/preprocessor.py   ← process data")
-    print("   python src/models/train_all.py    ← train all models")
+    run_preprocessing()
+
+    print("✅ Setup complete! Next run:")
+    print("   python src/models/train_all.py     ← train all models")
+    print("   python src/explainability/shap_analysis.py")
     print("   streamlit run src/dashboard/app.py ← launch UI")
