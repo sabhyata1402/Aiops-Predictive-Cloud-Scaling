@@ -121,17 +121,6 @@ After training:
 
 ---
 
-## 🎥 Video Demo Script (7 minutes)
-
-1. **0:00–1:00** — Problem statement: show threshold alert failing, 2-min delay
-2. **1:00–2:00** — Datasets: show data.gov structure, explain 3 providers
-3. **2:00–3:30** — Models: show training output, explain XGBoost vs LSTM
-4. **3:30–5:00** — Dashboard: live demo of forecast + SHAP + cost saving
-5. **5:00–6:00** — Results: show comparison table, learning curves, cross-cloud
-6. **6:00–7:00** — Conclusions: answer RQ1/RQ2/RQ3, future work
-
----
-
 ## ⚠️ Troubleshooting
 
 **"No module named torch"**
