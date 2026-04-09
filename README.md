@@ -35,7 +35,7 @@ Your browser will open at http://localhost:8501
 ## 📁 Project Structure
 
 ```
-h9mlai_project/
+project/
 ├── setup_and_download.py      ← START HERE
 ├── requirements.txt
 ├── README.md
