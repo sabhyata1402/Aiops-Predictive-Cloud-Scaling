@@ -1,5 +1,4 @@
 # H9MLAI — Intelligent Proactive Cloud Scaling
-## Sabhyata Kumari | X24283142 | NCI Dublin MSc AI 2025/2026
 
 > **Predicts CPU/memory spikes 30 minutes ahead using XGBoost, Random Forest,
 > and LSTM — with SHAP explainability and cost saving analysis.**
